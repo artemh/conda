@@ -11,7 +11,10 @@ from conda import config
 
 with open(join(dirname(__file__), 'index.json')) as fi:
     index = json.load(fi)
-
+index['mkl@'] = {
+    'name': 'mkl@', 'channel': '@', 'priority': 0,
+    'version': '0', 'build_number': 0,
+    'build': '', 'depends': [], 'track_features': 'mkl'}
 r = Resolve(index)
 
 f_mkl = set(['mkl'])
@@ -153,7 +156,7 @@ class TestSolve(unittest.TestCase):
 
     def test_iopro_mkl(self):
         self.assertEqual(
-            r.install(['iopro 1.4*', 'python 2.7*', 'numpy 1.7*', 'mkl@'], returnall=True),
+            r.install(['iopro 1.4*', 'python 2.7*', 'numpy 1.7*', '@mkl'], returnall=True),
             [['iopro-1.4.3-np17py27_p0.tar.bz2',
               'mkl-rt-11.0-p0.tar.bz2',
               'numpy-1.7.1-py27_p0.tar.bz2',
@@ -168,15 +171,15 @@ class TestSolve(unittest.TestCase):
 
     def test_mkl(self):
         self.assertEqual(r.install(['mkl']),
-                         r.install(['mkl 11*', 'mkl@']))
+                         r.install(['mkl 11*', '@mkl']))
 
     def test_accelerate(self):
         self.assertEqual(
             r.install(['accelerate']),
-            r.install(['accelerate', 'mkl@']))
+            r.install(['accelerate', '@mkl']))
 
     def test_scipy_mkl(self):
-        dists = r.install(['scipy', 'python 2.7*', 'numpy 1.7*', 'mkl@'])
+        dists = r.install(['scipy', 'python 2.7*', 'numpy 1.7*', '@mkl'])
         self.assert_have_mkl(dists, ('numpy', 'scipy'))
         self.assertTrue('scipy-0.12.0-np17py27_p0.tar.bz2' in dists)
 
@@ -187,7 +190,7 @@ class TestSolve(unittest.TestCase):
 
     def test_anaconda_mkl_2(self):
         # to test "with_features_depends"
-        dists = r.install(['anaconda 1.5.0', 'python 2.7*', 'numpy 1.7*', 'mkl@'])
+        dists = r.install(['anaconda 1.5.0', 'python 2.7*', 'numpy 1.7*', '@mkl'])
         self.assert_have_mkl(dists, ('numpy', 'scipy', 'numexpr', 'scikit-learn'))
         self.assertTrue('scipy-0.12.0-np17py27_p0.tar.bz2' in dists)
         self.assertTrue('mkl-rt-11.0-p0.tar.bz2' in dists)
@@ -199,7 +202,7 @@ class TestSolve(unittest.TestCase):
 
     def test_anaconda_mkl_3(self):
         # to test "with_features_depends"
-        dists = r.install(['anaconda 1.5.0', 'python 3*', 'mkl@'])
+        dists = r.install(['anaconda 1.5.0', 'python 3*', '@mkl'])
         self.assert_have_mkl(dists, ('numpy', 'scipy'))
         self.assertTrue('scipy-0.12.0-np17py33_p0.tar.bz2' in dists)
         self.assertTrue('mkl-rt-11.0-p0.tar.bz2' in dists)
@@ -209,7 +212,7 @@ class TestSolve(unittest.TestCase):
 class TestFindSubstitute(unittest.TestCase):
 
     def test1(self):
-        installed = r.install(['anaconda 1.5.0', 'python 2.7*', 'numpy 1.7*', 'mkl@'])
+        installed = r.install(['anaconda 1.5.0', 'python 2.7*', 'numpy 1.7*', '@mkl'])
         for old, new in [('numpy-1.7.1-py27_p0.tar.bz2',
                           'numpy-1.7.1-py27_0.tar.bz2'),
                          ('scipy-0.12.0-np17py27_p0.tar.bz2',
@@ -234,7 +237,7 @@ def test_pseudo_boolean():
         'zlib-1.2.7-0.tar.bz2',
     ]]
 
-    assert r.install(['iopro', 'python 2.7*', 'numpy 1.5*', 'mkl@'], returnall=True) == [[
+    assert r.install(['iopro', 'python 2.7*', 'numpy 1.5*', '@mkl'], returnall=True) == [[
         'iopro-1.4.3-np15py27_p0.tar.bz2',
         'mkl-rt-11.0-p0.tar.bz2',
         'numpy-1.5.1-py27_p4.tar.bz2',
@@ -249,16 +252,16 @@ def test_pseudo_boolean():
     ]]
 
 def test_get_dists():
-    dists = r.get_dists(["anaconda 1.5.0"])[0]
+    dists = r.get_dists(["anaconda 1.5.0"])
     assert 'anaconda-1.5.0-np17py27_0.tar.bz2' in dists
     assert 'dynd-python-0.3.0-np17py33_0.tar.bz2' in dists
 
 def test_generate_eq():
-    specs = ['anaconda']
-    dists, specs = r.get_dists(specs)
-    r2 = Resolve(dists, True, True)
-    C = r2.gen_clauses(specs)
-    eqv, eqb = r2.generate_version_metrics(C, specs)
+    specs = r.verify_specs(['anaconda'])
+    dists, new_specs, unsat = r.get_dists(specs, full=True)
+    r2 = Resolve(dists, sort=True, processed=True)
+    C = r2.gen_clauses()
+    eqv, eqb = r2.generate_version_metrics(C, new_specs)
     # Should satisfy the following criteria:
     # - lower versions of the same package should should have higher
     #   coefficients.
@@ -269,65 +272,100 @@ def test_generate_eq():
     #   latest version of a package.
     assert eqv == {
         'astropy-0.2-np15py26_0.tar.bz2': 1,
+        'astropy-0.2-np15py27_0.tar.bz2': 1,
         'astropy-0.2-np16py26_0.tar.bz2': 1,
+        'astropy-0.2-np16py27_0.tar.bz2': 1,
         'astropy-0.2-np17py26_0.tar.bz2': 1,
+        'astropy-0.2-np17py27_0.tar.bz2': 1,
         'astropy-0.2-np17py33_0.tar.bz2': 1,
         'bitarray-0.8.0-py26_0.tar.bz2': 1,
+        'bitarray-0.8.0-py27_0.tar.bz2': 1,
         'bitarray-0.8.0-py33_0.tar.bz2': 1,
         'cython-0.18-py26_0.tar.bz2': 1,
+        'cython-0.18-py27_0.tar.bz2': 1,
         'cython-0.18-py33_0.tar.bz2': 1,
         'distribute-0.6.34-py26_1.tar.bz2': 1,
+        'distribute-0.6.34-py27_1.tar.bz2': 1,
         'distribute-0.6.34-py33_1.tar.bz2': 1,
         'ipython-0.13.1-py26_1.tar.bz2': 1,
+        'ipython-0.13.1-py27_1.tar.bz2': 1,
         'ipython-0.13.1-py33_1.tar.bz2': 1,
         'llvmpy-0.11.1-py26_0.tar.bz2': 1,
+        'llvmpy-0.11.1-py27_0.tar.bz2': 1,
         'llvmpy-0.11.1-py33_0.tar.bz2': 1,
         'lxml-3.0.2-py26_0.tar.bz2': 1,
+        'lxml-3.0.2-py27_0.tar.bz2': 1,
         'lxml-3.0.2-py33_0.tar.bz2': 1,
         'matplotlib-1.2.0-np15py26_1.tar.bz2': 1,
+        'matplotlib-1.2.0-np15py27_1.tar.bz2': 1,
         'matplotlib-1.2.0-np16py26_1.tar.bz2': 1,
+        'matplotlib-1.2.0-np16py27_1.tar.bz2': 1,
         'matplotlib-1.2.0-np17py26_1.tar.bz2': 1,
+        'matplotlib-1.2.0-np17py27_1.tar.bz2': 1,
         'matplotlib-1.2.0-np17py33_1.tar.bz2': 1,
         'nose-1.2.1-py26_0.tar.bz2': 1,
+        'nose-1.2.1-py27_0.tar.bz2': 1,
         'nose-1.2.1-py33_0.tar.bz2': 1,
         'numpy-1.5.1-py26_3.tar.bz2': 3,
+        'numpy-1.5.1-py27_3.tar.bz2': 3,
         'numpy-1.6.2-py26_3.tar.bz2': 2,
         'numpy-1.6.2-py26_4.tar.bz2': 2,
+        'numpy-1.6.2-py26_p4.tar.bz2': 2,
+        'numpy-1.6.2-py27_3.tar.bz2': 2,
         'numpy-1.6.2-py27_4.tar.bz2': 2,
+        'numpy-1.6.2-py27_p4.tar.bz2': 2,
         'numpy-1.7.0-py26_0.tar.bz2': 1,
+        'numpy-1.7.0-py27_0.tar.bz2': 1,
         'numpy-1.7.0-py33_0.tar.bz2': 1,
         'pip-1.2.1-py26_1.tar.bz2': 1,
+        'pip-1.2.1-py27_1.tar.bz2': 1,
         'pip-1.2.1-py33_1.tar.bz2': 1,
         'psutil-0.6.1-py26_0.tar.bz2': 1,
+        'psutil-0.6.1-py27_0.tar.bz2': 1,
         'psutil-0.6.1-py33_0.tar.bz2': 1,
         'pyflakes-0.6.1-py26_0.tar.bz2': 1,
+        'pyflakes-0.6.1-py27_0.tar.bz2': 1,
         'pyflakes-0.6.1-py33_0.tar.bz2': 1,
-        'python-2.6.8-6.tar.bz2': 3,
+        'python-2.6.8-6.tar.bz2': 4,
+        'python-2.7.3-7.tar.bz2': 3,
         'python-2.7.4-0.tar.bz2': 2,
         'python-3.3.0-4.tar.bz2': 1,
         'pytz-2012j-py26_0.tar.bz2': 1,
+        'pytz-2012j-py27_0.tar.bz2': 1,
         'pytz-2012j-py33_0.tar.bz2': 1,
         'requests-0.13.9-py26_0.tar.bz2': 1,
+        'requests-0.13.9-py27_0.tar.bz2': 1,
         'requests-0.13.9-py33_0.tar.bz2': 1,
         'scipy-0.11.0-np15py26_3.tar.bz2': 1,
+        'scipy-0.11.0-np15py27_3.tar.bz2': 1,
         'scipy-0.11.0-np16py26_3.tar.bz2': 1,
+        'scipy-0.11.0-np16py27_3.tar.bz2': 1,
         'scipy-0.11.0-np17py26_3.tar.bz2': 1,
+        'scipy-0.11.0-np17py27_3.tar.bz2': 1,
         'scipy-0.11.0-np17py33_3.tar.bz2': 1,
         'six-1.2.0-py26_0.tar.bz2': 1,
+        'six-1.2.0-py27_0.tar.bz2': 1,
         'six-1.2.0-py33_0.tar.bz2': 1,
         'sqlalchemy-0.7.8-py26_0.tar.bz2': 1,
+        'sqlalchemy-0.7.8-py27_0.tar.bz2': 1,
         'sqlalchemy-0.7.8-py33_0.tar.bz2': 1,
         'tornado-2.4.1-py26_0.tar.bz2': 1,
+        'tornado-2.4.1-py27_0.tar.bz2': 1,
         'tornado-2.4.1-py33_0.tar.bz2': 1,
         'xlrd-0.9.0-py26_0.tar.bz2': 1,
+        'xlrd-0.9.0-py27_0.tar.bz2': 1,
         'xlrd-0.9.0-py33_0.tar.bz2': 1}
     assert eqb == {
         'dateutil-2.1-py26_0.tar.bz2': 1,
+        'dateutil-2.1-py27_0.tar.bz2': 1,
         'dateutil-2.1-py33_0.tar.bz2': 1,
         'numpy-1.6.2-py26_3.tar.bz2': 1,
+        'numpy-1.6.2-py27_3.tar.bz2': 1,
         'pyzmq-2.2.0.1-py26_0.tar.bz2': 1,
+        'pyzmq-2.2.0.1-py27_0.tar.bz2': 1,
         'pyzmq-2.2.0.1-py33_0.tar.bz2': 1,
         'sphinx-1.1.3-py26_2.tar.bz2': 1,
+        'sphinx-1.1.3-py27_2.tar.bz2': 1,
         'sphinx-1.1.3-py33_2.tar.bz2': 1,
         'system-5.8-0.tar.bz2': 1,
         'zeromq-2.2.0-0.tar.bz2': 1}
@@ -385,7 +423,7 @@ def test_nonexistent_deps():
         'mypackage-1.0-py33_0.tar.bz2',
         'mypackage-1.1-py33_0.tar.bz2',
     }
-    assert set(r.get_dists(['mypackage'])[0].keys()) == {
+    assert set(r.get_dists(['mypackage']).keys()) == {
         'mypackage-1.1-py33_0.tar.bz2',
         'nose-1.1.2-py33_0.tar.bz2',
         'nose-1.2.1-py33_0.tar.bz2',
@@ -485,7 +523,7 @@ def test_nonexistent_deps():
         'mypackage-1.0-py33_0.tar.bz2',
         'mypackage-1.1-py33_0.tar.bz2',
         }
-    assert set(r.get_dists(['mypackage'])[0].keys()) == {
+    assert set(r.get_dists(['mypackage']).keys()) == {
         'mypackage-1.0-py33_0.tar.bz2',
         'nose-1.1.2-py33_0.tar.bz2',
         'nose-1.2.1-py33_0.tar.bz2',
@@ -596,7 +634,7 @@ def test_circular_dependencies():
     assert set(r.find_matches(MatchSpec('package1'))) == {
         'package1-1.0-0.tar.bz2',
     }
-    assert set(r.get_dists(['package1'])[0].keys()) == {
+    assert set(r.get_dists(['package1']).keys()) == {
         'package1-1.0-0.tar.bz2',
         'package2-1.0-0.tar.bz2',
     }
@@ -679,7 +717,7 @@ def test_no_features():
             'zlib-1.2.7-0.tar.bz2',
             ]]
 
-    assert r.install(['python 2.6*', 'numpy 1.6*', 'scipy 0.11*', 'mkl@'],
+    assert r.install(['python 2.6*', 'numpy 1.6*', 'scipy 0.11*', '@mkl'],
         returnall=True) == [[
             'mkl-rt-11.0-p0.tar.bz2',           # This,
             'numpy-1.6.2-py26_p4.tar.bz2',      # this,
@@ -752,7 +790,7 @@ def test_no_features():
             'zlib-1.2.7-0.tar.bz2',
             ]]
 
-    assert r2.solve(['pandas 0.12.0 np16py27_0', 'python 2.7*', 'mkl@'],
+    assert r2.solve(['pandas 0.12.0 np16py27_0', 'python 2.7*', '@mkl'],
         returnall=True)[0] == [[
             'dateutil-2.1-py27_1.tar.bz2',
             'mkl-rt-11.0-p0.tar.bz2',           # This
